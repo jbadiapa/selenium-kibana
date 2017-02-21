@@ -1,62 +1,121 @@
+
 import unittest
+import sys
 from selenium import webdriver
-# from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoAlertPresentException
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from time import sleep
 
 
 class KibanaSelenium(unittest.TestCase):
 
+    USERNAME = 'operator'
+    PASSWORD = 'changeme'
+    PROTOCOL = 'https'
+    PORT = 443
+    IP = 'localhost'
+
     def setUp(self):
-        profile = webdriver.FirefoxProfile()
-        profile.set_preference('network.http.phishy-userpass-length', 255)
-        self.driver = webdriver.Firefox(firefox_profile=profile)
-        self.username = 'operator'
-        self.password = 'changeme'
-        self.ip = '192.168.1.52'
-        self.url = 'https://{user}:{passw}@{ip}/kibana/'.format(
-            user=self.username,
-            passw=self.password,
-            ip=self.ip
-        )
+        caps = DesiredCapabilities.CHROME.copy()
+        caps['acceptInsecureCerts'] = True
+        caps['level'] = 'trace'
+        self.driver = webdriver.Chrome(executable_path="chromedriver",
+                                       desired_capabilities=caps,
+                                       service_args=['--verbose',
+                                                     '--log-path='
+                                                     'chromedriver.log'])
+        self.driver.implicitly_wait(30)
+        self.verificationErrors = []
+        self.accept_next_alert = True
+        self.url = '{protocol}://{user}:{passwd}@{ip}:{port}/kibana/'.format(
+            protocol=KibanaSelenium.PROTOCOL,
+            user=KibanaSelenium.USERNAME,
+            passwd=KibanaSelenium.PASSWORD,
+            ip=KibanaSelenium.IP,
+            port=KibanaSelenium.PORT)
 
     def _url_load(self, url):
         driver = self.driver
-        driver.get(url)
-        sleep(2)
+        for i in range(20):
+            driver.get(url)
+            driver.set_window_size(1024, 768)
+            element = driver.find_element_by_tag_name('html')
+            if len(element.text) > 0:
+                sleep(1)
+                break
         return driver
 
     def _url_test(self, url, text):
         driver = self._url_load(url)
-        assert text in driver.title
         return driver
 
     def test_kibana_login(self):
         self._url_test(self.url, 'Kibana')
 
     def test_kibana_settings_create_pattern(self):
-        driver = self._url_test(self.url, 'Kibana')
-        css = 'button.btn.btn-success'
-        # If the  title is Discover - kibana it was created before
-        # so we need to recreate it
-        if driver.title == 'Discover - Kibana':
-            settings = driver.find_element_by_css_selector(
-                'div.navbar-collapse.collapse '
-                '> ul:nth-of-type(3) > li:nth-of-type(6) > a.ng-binding')
-            settings.click()
-        sleep(3)
-        driver.find_element_by_name('form')
-        elem = driver.find_element_by_css_selector(css)
-        elem.submit()
 
-    '''
-    def test_kibana_status(self):
         driver = self._url_test(self.url, 'Kibana')
-        elem = driver.find_element(By.CSS_SELECTOR,
-                                   'a[href=\'/kibana/status\']')
-        elem.click()
-    '''
+        driver.maximize_window()
+        for i in range(20):
+            try:
+                driver.find_element_by_link_text("Settings").click()
+                break
+            except Exception:
+                print ('title: {}'.format(driver.title))
+        driver.find_element_by_css_selector("button.btn.btn-success").click()
+
+    def is_element_present(self, how, what):
+        try:
+            self.driver.find_element(by=how, value=what)
+        except NoSuchElementException:
+            return False
+        return True
+
+    def is_alert_present(self):
+        try:
+            self.driver.switch_to_alert()
+        except NoAlertPresentException:
+            return False
+        return True
+
+    def close_alert_and_get_its_text(self):
+        try:
+            alert = self.driver.switch_to_alert()
+            alert_text = alert.text
+            if self.accept_next_alert:
+                alert.accept()
+            else:
+                alert.dismiss()
+            return alert_text
+        finally:
+            self.accept_next_alert = True
+
     def tearDown(self):
         self.driver.close()
+        self.assertEqual([], self.verificationErrors)
+
+
+def parse_arguments():
+    arguments = {'--ip': 'localhost',
+                 '--protocol': 'https',
+                 '--username': 'operator',
+                 '--password': 'changeme',
+                 '--port': '443'}
+    iterations = list(sys.argv)
+    for arg in iterations:
+        if arg in arguments.keys():
+            pos = sys.argv.index(arg)
+            sys.argv.pop(pos)
+            arguments[arg] = sys.argv.pop(pos)
+
+    KibanaSelenium.USERNAME = arguments['--username']
+    KibanaSelenium.PASSWORD = arguments['--password']
+    KibanaSelenium.IP = arguments['--ip']
+    KibanaSelenium.PROTOCOL = arguments['--protocol']
+    KibanaSelenium.PORT = arguments['--port']
+
 
 if __name__ == "__main__":
+    parse_arguments()
     unittest.main()
