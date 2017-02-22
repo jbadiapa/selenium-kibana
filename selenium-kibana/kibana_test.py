@@ -5,6 +5,9 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import NoAlertPresentException
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 from time import sleep
 
 
@@ -17,14 +20,7 @@ class KibanaSelenium(unittest.TestCase):
     IP = 'localhost'
 
     def setUp(self):
-        caps = DesiredCapabilities.CHROME.copy()
-        caps['acceptInsecureCerts'] = True
-        caps['level'] = 'trace'
-        self.driver = webdriver.Chrome(executable_path="chromedriver",
-                                       desired_capabilities=caps,
-                                       service_args=['--verbose',
-                                                     '--log-path='
-                                                     'chromedriver.log'])
+        self.driver = webdriver.Firefox()
         self.driver.implicitly_wait(30)
         self.verificationErrors = []
         self.accept_next_alert = True
